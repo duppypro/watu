@@ -1,0 +1,8 @@
+d0e1f2a (HEAD -> main) refactor: introduce domain layer, retire legacy handlers
+42	0	src/domain/models.rs
+28	0	src/domain/events.rs
+15	0	src/domain/mod.rs
+0	112	src/handlers/legacy.rs
+0	67	src/handlers/old_router.rs
+0	34	src/handlers/mod.rs
+

@@ -1,0 +1,4 @@
+c9d0e1f (HEAD -> main) assets: update brand icons to new design
+-	-	assets/icons/app_icon.png
+-	-	assets/logo.png
+

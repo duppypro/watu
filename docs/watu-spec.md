@@ -1,5 +1,5 @@
 # Watu — Spec Draft
-> Status: brainstorm/scratch — lives in `tmp/`, not committed. Move to a new repo's `docs/` at Step 2.
+> Status: Spec Draft (Step 1 in progress) — committed to `docs/`. See [§Definition of Done](#definition-of-done-step-4-eval) for completion criteria.
 
 ---
 
@@ -65,8 +65,8 @@ Claude Code harness sessions are opaque. You know something is happening (files 
 ```
 [Phase 1 MVP]
   git refs watcher (inotify on .git/refs/heads/<branch>)
-    └─> git log --numstat parser
-          └─> AppState (tree + diff counts)
+    └─> git log --patch --unified=0 parser
+          └─> AppState (tree + FileDiffs + animation queue)
                 └─> ratatui render loop
 
 [Phase 2: add .jsonl]
@@ -82,7 +82,7 @@ Three async `tokio::spawn` tasks communicating over `tokio::sync::mpsc` channels
 **Phase 3 event correlation logic:**
 - inotify write event on path X → read before+after content → line-diff → update diff bar
 - `.jsonl` event with `toolName`/`file_path` → associate metadata (tool, agent, line ranges) → queue emoji animation
-- inotify write event with NO matching `.jsonl` entry within ~200ms window → "external write" → assign external-write emoji (see §Emoji Map)
+- inotify write event with NO matching `.jsonl` entry within ~200ms window → "external write" → assign external-write emoji (see §Emoji Map below)
 
 ---
 
@@ -95,11 +95,23 @@ watu  [session: spec/roguesavvy-draft]  [agent: claude-sonnet-4-6]  [↑↓ to s
 
  ~/git-projects/rogue-savvy/
  ├── backend/
- │   ├── rogue_savvy/telemetry.py    ✏️·····>  ████████░░░░░  +42 -7  _110
- │   └── rogue_savvy/models.py       👁️·····>  ░░░░░░░░░░░░░  (read L1–88)
+ │   ├── rogue_savvy/telemetry.py    ✏️·····>  ░░▓▓░░░░░░░░████  +42 -7  _110
+ │   └── rogue_savvy/models.py       👁️·····>  ░░░░░░░░░░░░░     (read L1–88)
  └── docs/
-     └── spec-foundation.md          📝·····>  ██░░░░░░░░░░░  +12 -0  _204
+     └── spec-foundation.md          📝·····>  ░░░░░░░░░████     +12 -0  _204
 ```
+
+**Layout notation:**
+
+| Symbol | Meaning |
+|---|---|
+| `✏️·····>` | Emoji in flight toward the file row; persists for `emoji_speed_ms` |
+| `░` | Neutral fill — resting state (entire bar), or unchanged lines during flash |
+| `▓` | Deleted lines during flash; positioned at their location in the old file |
+| `█` | Added lines during flash; inserted at each hunk's position, may widen bar |
+| `+42 -7` | Count label: total lines added / deleted in the most recent event |
+| `_110` | Line-count label: file currently has 110 lines (`new_line_count`); `_` prefix is a visual separator |
+| `(read L1–88)` | Read-range annotation for 👁️ events; shown instead of a diff bar (reads have no content change) |
 
 ### Tree behavior
 - **Expand on activity:** when any file inside a dir becomes active, all ancestor dirs expand to show it.
@@ -107,15 +119,72 @@ watu  [session: spec/roguesavvy-draft]  [agent: claude-sonnet-4-6]  [↑↓ to s
 - **Only active files shown** — watu is not a file browser; the tree is a live activity feed.
 - Unicode box glyphs: `├─` `└─` `│` `┬`. No fallback for MVP (Ghostty assumed).
 
-### Diff bar
-- Characters: `█` green (added lines), `▓` red (deleted), `░` gray (unchanged context)
-- Phase 1 (git-log): counts from `git log --numstat` — bar shows total added/deleted per last commit touching the file
-- Phase 3 (inotify): live update on each write, not just per-commit
-- **Width scaling:** `bar_width = (file_line_count / max_sibling_line_count) * available_col_width`  
-  Available width = `terminal_width - len(file_path_prefix) - len(emoji_col) - len(count_label)`
-- Recomputed on `SIGWINCH` / terminal resize event
+### Diff bar — resting state
 
-### Emoji tool map
+Between events, each active file shows a plain proportional bar of gray fill:
+
+```
+src/lib.rs    ░░░░░░░░░░░░░░
+```
+
+- **Characters:** `░` gray only — no `+`/`-` markers at rest
+- **Width:** `bar_width = (file_line_count / max_sibling_line_count) * available_col_width`  
+  `available_col_width = terminal_width − len(path_prefix) − len(emoji_col) − len(count_label)`
+- Recomputed on `SIGWINCH`
+
+### Diff bar — flash state
+
+On each commit or edit event the bar briefly expands to a **positional diff overlay**, then snaps back to resting:
+
+```
+              state 0 (resting, old size)  →  flash (bar_flash_ms)  →  state 2 (resting, new size)
+src/lib.rs    ░░░░░░░░░░░░░░               →  ░░░░▓▓▓▓░░▓▓████      →  ░░░░░░░░░░
+```
+
+- `░` — unchanged lines at their position in the old file
+- `▓` red — deleted lines at their position in the old file
+- `█` green — added lines, inserted at each hunk's position (expand bar width)
+- **Flash duration:** `bar_flash_ms` config key, default **400 ms**
+- Flash and emoji animation are synchronized: emoji departs at flash-start, arrives at flash-end
+
+**Bar width during flash** — additions temporarily widen the bar:
+
+```
+visual_total = old_line_count + Σ hunk.new_count
+scale        = bar_width / visual_total
+
+for each segment in old file order:
+  unchanged region → emit '░' × ceil(line_count × scale)
+  at each hunk     → emit '▓' × ceil(old_count × scale)
+                     emit '█' × ceil(new_count × scale)
+```
+
+### Diff bar — data model and source
+
+**Git command (Phase 1):** `git log --patch --unified=0 --oneline -N`  
+Replaces `--numstat`; `@@` hunk headers provide exact position. Numstat totals (`+N -M`) are derived from hunks — no separate call needed.
+
+```rust
+struct Hunk {
+    old_start: u32,   // 1-indexed line in old file where hunk begins
+    old_count: u32,   // lines deleted
+    new_start: u32,   // 1-indexed line in new file
+    new_count: u32,   // lines added
+}
+struct FileDiff {
+    old_path:       String,
+    new_path:       String,    // == old_path unless renamed
+    old_line_count: u32,       // cached from prior state; drives resting bar width before flash
+    new_line_count: u32,       // drives resting bar width after flash
+    hunks:          Vec<Hunk>,
+    is_binary:      bool,      // true → render placeholder '░' bar during flash (no hunk data)
+}
+```
+
+**Phase 2 (`.jsonl`):** `Edit` events carry `old_string`/`new_string`. Position = locate `old_string` in file → line number → construct `Hunk` directly, no git call.  
+**Phase 3 (inotify):** each WIP write triggers a flash against the snapshot cached at last commit.
+
+### Emoji Map
 
 | Emoji | Tool / Source | Phase available |
 |---|---|---|
@@ -136,9 +205,23 @@ watu  [session: spec/roguesavvy-draft]  [agent: claude-sonnet-4-6]  [↑↓ to s
 
 ### Emoji animation
 - Each tick, emoji position linearly interpolates from source cell (session header row, agent label column) toward target file row in the tree.
-- Speed: configurable ticks-per-cell, default reaches target in ~400ms.
+- Speed: configurable ticks-per-cell, default reaches target in ~400ms — synchronized with `bar_flash_ms` so emoji arrives as flash ends.
 - Implementation: no sprite system — simply track `(src_row, src_col, dst_row, dst_col, progress: f32)` in AppState; render emoji glyph at `lerp(src, dst, progress)` each frame.
 - Emoji vanishes on arrival. Multiple in-flight animations supported (Vec of animation entries).
+
+### Configuration (`watu.toml`)
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `watch_dir` | path | `.` (cwd) | Directory to observe |
+| `commit_depth` | u32 | `20` | How many commits back `git log` looks |
+| `collapse_timeout_ms` | u64 | `8000` | Inactivity before a subtree collapses |
+| `bar_flash_ms` | u64 | `400` | Positional diff overlay hold time; never scales with replay speed |
+| `emoji_speed_ms` | u64 | `400` | Emoji flight duration; synced with `bar_flash_ms` by default |
+| `external_write_emoji` | string | `"👤"` | Emoji for inotify writes with no `.jsonl` match |
+| `replay_speed` | string | `"1x"` | Mode 1 speed multiplier (e.g. `"10x"`, `"0.5x"`) |
+| `ffw_idle_cap_ms` | u64 | `5000` | Mode 1 max display gap between commits after speed scaling |
+| `replay_bpm` | f32 | `90.0` | Mode 2 beat tempo; one commit per beat, floor = `bar_flash_ms` |
 
 ---
 
@@ -185,16 +268,16 @@ watu  [session: spec/roguesavvy-draft]  [agent: claude-sonnet-4-6]  [↑↓ to s
 
 ## Phase 1 MVP — Git-Log Mode
 
-**Data source:** `git log --numstat --oneline -20` on the current branch.  
+**Data source:** `git log --patch --unified=0 --oneline -20` on the current branch.  
 **Trigger:** inotify watch on `.git/refs/heads/<current-branch>` — fires on every new commit.  
 **Fallback:** poll every 5s if inotify on `.git/` is unavailable.
 
 **What you get:**
 - File tree of recently-changed files (last N commits, configurable)
-- Diff bars from numstat (added/deleted line counts per file per commit)
+- Positional diff bars — flash on each new commit showing `▓`/`█` at the exact hunk locations
 - Auto-expand/collapse on commit activity
 - 🟡 emoji on changed files (no agent metadata yet)
-- Replay mode (see §Replay Mode)
+- Replay mode (see §Watch & Replay Modes)
 
 **What you don't get yet:**
 - Read/grep events (no .jsonl)
@@ -228,20 +311,91 @@ watu  [session: spec/roguesavvy-draft]  [agent: claude-sonnet-4-6]  [↑↓ to s
 **What Phase 3 adds:**
 - Sub-commit granularity: WIP writes visible before commit
 - External write detection (inotify event, no .jsonl match within ~200ms)
-- External write emoji (👤 / 👽 / 🔧 — see §Emoji Map)
+- External write emoji (👤 / 👽 / 🔧 — see §Emoji Map above)
 - Live diff bar update on each write (not just per-commit)
 - Before-snapshot: watu must cache file content hash+snapshot on last-known state to compute before/after diff
 
 ---
 
-## Replay Mode
+## Watch & Replay Modes
 
-**CLI:** `watu replay path/to/session.jsonl [--speed 2x|instant]`
+Three timing modes, all sharing the same rendering pipeline. `bar_flash_ms` is a perception constant — **it never scales with replay speed**.
 
-- Reads `.jsonl` lines sequentially, applies original timestamp delta as `tokio::time::sleep`
-- `--speed 2x` halves all deltas; `--instant` removes delays (snapshot mode)
-- File content diffs in replay: reconstructed from `toolInput` of Edit/Write entries — no live filesystem needed for replay
-- Replay mode doubles as the **automated test harness**: run against a fixed `.jsonl` fixture, assert expected tree events and diff bar values in a snapshot test
+---
+
+### Mode 3 — `watch` (live, default)
+
+```
+watu [watch] [<dir>]
+```
+
+The primary use case. Animation is driven by real incoming events:
+
+- **Phase 1:** inotify on `.git/refs/heads/<branch>` → new commit → flash
+- **Phase 2:** new `.jsonl` line appended → tool event → flash
+- **Phase 3:** inotify write on working tree → flash
+
+If events arrive faster than `bar_flash_ms` they queue. Display falls behind real time rather than dropping frames.
+
+---
+
+### Mode 1 — `replay --speed` (timestamp-proportional)
+
+```
+watu replay [--speed <Nx>] [--ffw-idle-cap <ms>] <file.jsonl>
+```
+
+Replays events in timestamp order. Display gap between commits:
+
+```
+display_gap_ms = min(real_gap_ms / N, ffw_idle_cap_ms)
+```
+
+| Real gap | Speed | Raw display gap | After 5 s cap |
+|---|---|---|---|
+| 2 min | 1× | 120 000 ms | 5 000 ms |
+| 2 min | 10× | 12 000 ms | 5 000 ms |
+| 30 s | 1× | 30 000 ms | 5 000 ms |
+| 3 s | 10× | 300 ms | 300 ms ✓ |
+| 1 s | 1× | 1 000 ms | 1 000 ms ✓ |
+
+- Default speed: `1x`
+- `--ffw-idle-cap`: default **5 000 ms** — gaps that would display longer are capped here
+- `bar_flash_ms` stays fixed at 400 ms regardless of `--speed`
+
+---
+
+### Mode 2 — `replay --bpm` (beat mode)
+
+```
+watu replay --bpm <N> <file.jsonl>
+```
+
+Ignores timestamps. Each commit occupies exactly one beat of display time, with a hard floor at `bar_flash_ms`:
+
+```
+beat_ms        = 60 000 / bpm
+per_commit_ms  = max(beat_ms, bar_flash_ms)
+static_hold_ms = per_commit_ms − bar_flash_ms
+```
+
+| BPM | beat_ms | flash_ms | static_hold_ms | total |
+|---|---|---|---|---|
+| 90 (default) | 666.7 | 400 | 266.7 | 666.7 (1 beat) |
+| 60 | 1 000 | 400 | 600 | 1 000 (1 beat) |
+| 120 | 500 | 400 | 100 | 500 (1 beat) |
+| 180 | 333.3 | 400 | 0 | 400 (flash fills beat) |
+
+- Default BPM: **90**
+- When `bar_flash_ms > beat_ms`, the flash runs its full duration and static hold is 0 — the beat floor is `bar_flash_ms`
+- `--instant` flag: sets `bar_flash_ms = 0` and `bpm = ∞` — fires through all events with no delay; useful for snapshot test assertions
+
+---
+
+### Common replay behaviour
+
+- File content diffs reconstructed from `toolInput` of Edit/Write entries — no live filesystem access required
+- Replay is the **automated test harness**: run against a fixture in `tests/fixtures/`, assert final AppState with `insta` snapshots
 
 ---
 

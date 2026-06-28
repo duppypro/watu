@@ -1,0 +1,5 @@
+a7b8c9d (HEAD -> main) refactor: rename components/ to widgets/
+0	0	src/components/button.rs => src/widgets/button.rs
+0	0	src/components/modal.rs => src/widgets/modal.rs
+5	2	src/components/mod.rs => src/widgets/mod.rs
+

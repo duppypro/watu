@@ -1,0 +1,7 @@
+e1f2a3b (HEAD -> main) feat: add replay mode foundation
+87	12	src/replay.rs
+23	5	src/main.rs
+4	1	Cargo.toml
+45	0	tests/fixtures/sample_session.jsonl
+3	0	docs/replay.md
+

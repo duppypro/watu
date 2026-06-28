@@ -1,0 +1,18 @@
+a1b2c3d (HEAD -> main) refactor: replace validation chain with event-driven teardown
+
+diff --git a/src/lib.rs b/src/lib.rs
+index a111111..b222222 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -5,4 +4,0 @@
+-    validate_a(state);
+-    validate_b(state);
+-    validate_c(state);
+-    validate_d(state);
+@@ -11,2 +7,4 @@
+-    teardown_old();
+-    cleanup_legacy();
++    setup_handler();
++    register(EventKind::Teardown);
++    flush();
++    finalize();

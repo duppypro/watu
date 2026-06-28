@@ -1,0 +1,16 @@
+a3b4c5d (HEAD -> main) fix: patch timing vulnerability in token comparison
+12	3	src/auth.rs
+
+b4c5d6e feat: add OAuth2 PKCE flow support
+45	8	src/auth.rs
+22	0	src/oauth.rs
+3	1	Cargo.toml
+
+c5d6e7f refactor: extract token validation into separate module
+0	28	src/auth.rs
+28	0	src/token_validator.rs
+1	0	src/lib.rs
+
+d6e7f8a chore: initial auth module skeleton
+67	0	src/auth.rs
+
