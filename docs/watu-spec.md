@@ -23,14 +23,17 @@ Character names are not copyrightable but *may* be trademarked. Marvel/Disney ho
 **`watu` as an independent word:**  
 `watu` is the Swahili/Bantu word for *"people"* — a common noun in a major language family. This gives it independent standing: a rights holder challenging `watu` would be contesting a real word in another language, which is a much harder case.
 
-**Namespace collision check (2026-06-20):**
+**Namespace collision check (2026-06-20; npm row corrected 2026-07-13 — see issue #4):**
 | Registry | Collision? | Notes |
 |---|---|---|
 | GitHub repos | ⚠️ Partial | `wp-plugins/watu`, `leeci/watu`, `asajin/watu` all exist — a decade-old WordPress quiz plugin, completely different ecosystem (PHP/WordPress). No confusion risk. |
-| npm | ✅ Clean | No `watu` package found. |
-| crates.io | ✅ Clean | Verified 2026-06-20: `crates.io/crates/watu` returns "Crate not found". |
-| PyPI | ✅ Clean | No `watu` package found. |
+| npm | ❌ TAKEN | `watu@1.0.0` — NLP name-parsing lib, published 2022-06-28, dormant since. The 2026-06-20 "clean" result was a false negative (npmjs.com search omits dormant packages; `npm view watu` is authoritative). npm channel ships as `@agentic-arts/watu` instead. |
+| crates.io | ✅ Clean | Re-verified 2026-07-13: `crates.io/api/v1/crates/watu` returns "crate does not exist". Flat namespace, first-come — reserve by publishing an early minimal version. |
+| PyPI | ✅ Clean | Re-verified 2026-07-13 via `pypi.org/pypi/watu/json` (404). |
+| Homebrew | ✅ Clean | Checked 2026-07-13 via `formulae.brew.sh/api/formula/watu.json` (404). |
 | CLI tool / TUI | ✅ Clean | No existing CLI or TUI tool named `watu`. |
+
+> Why the correction matters: name-availability checks must query each registry's API directly (`npm view <name>`, `crates.io/api/v1/crates/<name>`, `pypi.org/pypi/<name>/json`) — website search boxes de-rank or omit dormant packages and produce false "clean" results.
 
 **The broken oath as product philosophy:**  
 Uatu broke his oath to "only watch" when the stakes justified it. `watu` is structurally read-only and non-interventionist, but exposes a small set of **explicitly triggered intervention hooks** (future features — e.g., "flag this session for review", "annotate this file with a watu comment", "pause session replay"). These hooks are never automatic; they must be user-triggered. The name signals this tension intentionally.
