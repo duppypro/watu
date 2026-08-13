@@ -2,6 +2,11 @@
 
 > **"I only watch."** *(and sometimes I don't.)*
 
+> **Origin:** spun off 2026-06-20 from [btw](https://github.com/duppypro/btw), Duppy's side-quest
+> and cross-repo workspace — predating btw's issue-driven workflow, so
+> [watu#5](https://github.com/duppypro/watu/issues/5) is the origin-record thread
+> (per the spin-off link convention, [btw#22](https://github.com/duppypro/btw/issues/22)).
+
 A Rust + ratatui TUI that gives real-time visual observability of [Claude Code](https://claude.ai/code) harness sessions — which files are being touched, by which tool or agent, shown as an auto-expanding/collapsing directory tree with animated emoji and proportional diff bars.
 
 **Status: Spec Draft** — no production code yet. See [`docs/watu-spec.md`](docs/watu-spec.md) for the full spec.
