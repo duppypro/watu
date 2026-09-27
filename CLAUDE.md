@@ -23,3 +23,22 @@ TUI file-activity observer for Claude Code harness sessions — "I only watch." 
 
 - Origin: spun off from btw 2026-06-20 (README; watu#5).
 - npm name: `@agentic-arts/watu`, because bare `watu` has been taken since 2022 (#4).
+
+## Inherits
+
+Global persona: `~/.claude/CLAUDE.md`. Domain process: `~/git-projects/CLAUDE.md`.
+The development workflow is the `workflow` skill. Load it for a branch, a commit, a pull request, or a merge.
+
+## Issues
+
+Open a GitHub issue before every feature, bug, or tangent.
+The standing status issue is https://github.com/duppypro/watu/issues/9.
+Refresh it on every `pr-cleanup`.
+
+## Branch policy
+
+The live check is `repo-gate`. The declared policy is the `workflow` skill.
+
+## Ignore file
+
+The baseline is the bullet *Write `.gitignore` before the first commit* in the `workflow` skill, § *Branches and worktrees*.
