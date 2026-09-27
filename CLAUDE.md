@@ -26,7 +26,7 @@ TUI file-activity observer for Claude Code harness sessions — "I only watch." 
 
 ## Inherits
 
-`AGENTS.md` names the two files above this one: global persona, then domain process.
+Global persona: `~/.claude/CLAUDE.md`. Domain process: `~/git-projects/CLAUDE.md`.
 The development workflow is the `workflow` skill. Load it for a branch, a commit, a pull request, or a merge.
 
 ## Issues
@@ -38,9 +38,7 @@ Refresh it on every `pr-cleanup`.
 ## Branch policy
 
 The live check is `repo-gate`. The declared policy is the `workflow` skill.
-This repo is on that policy (ruleset `protect-default-branch-owner-only`).
 
 ## Ignore file
 
 The baseline is the bullet *Write `.gitignore` before the first commit* in the `workflow` skill, § *Branches and worktrees*.
-This repo adds `/target/` for Rust build output.
